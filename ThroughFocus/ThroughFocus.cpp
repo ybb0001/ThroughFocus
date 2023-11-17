@@ -80,7 +80,9 @@ TD TF_Data[65];
 
 typedef struct {
 	int min[3] = { 0 };
+	int min_index[3] = { 0 };
 	int max[3] = { 0 };
+	int max_index[3] = { 0 };
 	int PD_AVG[3] = { 0 };
 	int group[16] = { 0 };
 	int cnt = 0;
@@ -170,6 +172,14 @@ int data_Parse(string line) {
 				break;
 			s[d++] = line[i++];
 		}
+		if (d > 9) {
+			d = 0;	i++;
+			while (i < len&&line[i] != '\t') {
+				if (line[i] == '(')
+					break;
+				s[d++] = line[i++];
+			}
+		}
 		s[d] = '\0';
 		int c = stoi(s);
 		if (!MTF&&c > 45) {
@@ -189,7 +199,7 @@ int data_Parse(string line) {
 		if (MTF&&data_1 < 90)
 			data_1 /= 100;
 
-		if (data_1 > 0.99&&i < 50)
+		if ((data_1 > 0.99|| data_1==0)&&i < 51)
 			continue;
 
 		//if (!MTF&&data_1 > 0.99)
@@ -1235,9 +1245,11 @@ void PS_PD_check(int f) {
 
 		if (Field_Data[PD_Data[f].group[i]].PD_AVG > PD_Data[f].max[0]) {
 			PD_Data[f].max[0] = Field_Data[PD_Data[f].group[i]].PD_AVG;
+			PD_Data[f].max_index[0] = i+1;
 		}
 		if (Field_Data[PD_Data[f].group[i]].PD_AVG < PD_Data[f].min[0]) {
 			PD_Data[f].min[0] = Field_Data[PD_Data[f].group[i]].PD_AVG;
+			PD_Data[f].min_index[0] = i+1;
 		}
 		PD_Data[f].PD_AVG[0] += Field_Data[PD_Data[f].group[i]].PD_AVG;
 	}
@@ -1315,16 +1327,22 @@ void PS_PD_check(int f) {
 				k++;
 			}
 
-
 	fout << "0.";
 	fout << f;
-	fout << "F PS = ";
+	fout << "F ";
+
+	fout << PD_Data[f].max_index[0];
+	fout << "vs";
+	fout << PD_Data[f].min_index[0];
+	fout << " PS = ";
+
 	fout << PD_Data[f].max[0];
 	fout << " - ";
 	fout << PD_Data[f].min[0];
 	fout << " = ";
 	fout << ps << endl;
 
+	TF_Check_Result << PD_Data[f].max_index[0] << "vs" << PD_Data[f].min_index[0] << "	";
 	TF_Check_Result << ps << "	";
 
 	fout << "0.";
@@ -1624,31 +1642,67 @@ int upload(int mode) {
 				TF_Check_Result << "0.8F_HVD	";
 
 			if (F3&&PD_Data[3].cnt > 0)
-				TF_Check_Result << "0.3F_PS	" << "0.3F_PS_H	" << "0.3F_PS_V	" << "0.3F_PD	" << "0.3F_PD_H	" << "0.3F_PD_V	";
+				TF_Check_Result << "0.3F_Tilt	" << "0.3F_PS	" << "0.3F_PS_H	" << "0.3F_PS_V	" << "0.3F_PD	" << "0.3F_PD_H	" << "0.3F_PD_V	";
 
 			if (F5&&PD_Data[5].cnt > 0)
-				TF_Check_Result << "0.5F_PS	" << "0.5F_PS_H	" << "0.5F_PS_V	" << "0.5F_PD	" << "0.5F_PD_H	" << "0.5F_PD_V	";
+				TF_Check_Result << "0.5F_Tilt	" << "0.5F_PS	" << "0.5F_PS_H	" << "0.5F_PS_V	" << "0.5F_PD	" << "0.5F_PD_H	" << "0.5F_PD_V	";
 
 			if (F6&&PD_Data[6].cnt > 0)
-				TF_Check_Result << "0.6F_PS	" << "0.6F_PS_H	" << "0.6F_PS_V	" << "0.6F_PD	" << "0.6F_PD_H	" << "0.6F_PD_V	";
+				TF_Check_Result << "0.6F_Tilt	" << "0.6F_PS	" << "0.6F_PS_H	" << "0.6F_PS_V	" << "0.6F_PD	" << "0.6F_PD_H	" << "0.6F_PD_V	";
 
 			if (F7&&PD_Data[7].cnt > 0)
-				TF_Check_Result << "0.7F_PS	" << "0.7F_PS_H	" << "0.7F_PS_V	" << "0.7F_PD	" << "0.7F_PD_H	" << "0.7F_PD_V	";
+				TF_Check_Result << "0.7F_Tilt	" << "0.7F_PS	" << "0.7F_PS_H	" << "0.7F_PS_V	" << "0.7F_PD	" << "0.7F_PD_H	" << "0.7F_PD_V	";
 
 			if (F8&&PD_Data[8].cnt > 0)
-				TF_Check_Result << "0.8F_PS	" << "0.8F_PS_H	" << "0.8F_PS_V	" << "0.8F_PD	" << "0.8F_PD_H	" << "0.8F_PD_V	";
+				TF_Check_Result << "0.8F_Tilt	" << "0.8F_PS	" << "0.8F_PS_H	" << "0.8F_PS_V	" << "0.8F_PD	" << "0.8F_PD_H	" << "0.8F_PD_V	";
 
-
-			if (PD_Data[5].cnt > 0) {
-				TF_Check_Result << "0.5F_Adjust	OK_Range	0.3F_PS	0.5F_PS	0.8F_PS	";
+			if (F3) {
+				TF_Check_Result << "0.3F_Adjust	OK_Range	";
+				for (int k = 3; k < 9; k++) {
+					if (PD_Data[k].cnt > 0) {
+						TF_Check_Result <<"0."<<k << "F_PS	";
+					}
+				}
+			}
+			if (F5) {
+				TF_Check_Result << "0.5F_Adjust	OK_Range	";
+				for (int k = 3; k < 9; k++) {
+					if (PD_Data[k].cnt > 0) {
+						TF_Check_Result << "0." << k << "F_PS	";
+					}
+				}
+			}
+			if (F6) {
+				TF_Check_Result << "0.6F_Adjust	OK_Range	";
+				for (int k = 3; k < 9; k++) {
+					if (PD_Data[k].cnt > 0) {
+						TF_Check_Result << "0." << k << "F_PS	";
+					}
+				}
+			}
+			if (F7) {
+				TF_Check_Result << "0.7F_Adjust	OK_Range	";
+				for (int k = 3; k < 9; k++) {
+					if (PD_Data[k].cnt > 0) {
+						TF_Check_Result << "0." << k << "F_PS	";
+					}
+				}
+			}
+			if (F8) {
+				TF_Check_Result << "0.8F_Adjust	OK_Range	";
+				for (int k = 3; k < 9; k++) {
+					if (PD_Data[k].cnt > 0) {
+						TF_Check_Result << "0." << k << "F_PS	";
+					}
+				}
 			}
 
-			if (PD_Data[8].cnt > 0) {
-				TF_Check_Result << "0.8F_Adjust	OK_Range	0.3F_PS	0.5F_PS	0.8F_PS	";
+			TF_Check_Result << "Max_Adjust	OK_Range	";
+			for (int k = 3; k < 9; k++) {
+				if (PD_Data[k].cnt > 0) {
+					TF_Check_Result << "0." << k << "F_PS	";
+				}
 			}
-
-			TF_Check_Result << "Max_Adjust	OK_Range	0.3F_PS	0.5F_PS	0.8F_PS	";
-
 			TF_Check_Result << endl;
 		}
 
@@ -1666,7 +1720,7 @@ int upload(int mode) {
 			PS_PD_check(8);
 
 		if (F3&&PD_Data[3].cnt > 0)
-			OK_Range_Adjust(5);
+			OK_Range_Adjust(3);
 		if (F5&&PD_Data[5].cnt > 0)
 			OK_Range_Adjust(5);
 		if (F6&&PD_Data[6].cnt > 0)

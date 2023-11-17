@@ -180,7 +180,7 @@ public:
 
     void retranslateUi(QWidget *mQWidget)
     {
-        mQWidget->setWindowTitle(QApplication::translate("mQWidget", "TF_Simulation_230220", Q_NULLPTR));
+        mQWidget->setWindowTitle(QApplication::translate("mQWidget", "TF_Simulation_230907", Q_NULLPTR));
         label->setText(QApplication::translate("mQWidget", "SW Last TF Data Check Result ", Q_NULLPTR));
         pushButton_Save->setText(QApplication::translate("mQWidget", "Save", Q_NULLPTR));
         label_7->setText(QApplication::translate("mQWidget", "TF_Data_Path", Q_NULLPTR));
