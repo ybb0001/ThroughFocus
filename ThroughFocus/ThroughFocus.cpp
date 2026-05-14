@@ -38,7 +38,7 @@ bool Initial_log = true;
 bool F3 = false, F5 = false, F6 = false, F7 = false, F8 = false, Curve_Fit = false, MTF = false;
 int OK[11] = { 0 }, SFR_Table[65][65], F_POS[10] = { 0 };
 unsigned int Item_Select = 0;
-int mode = 1, TF_step = 41, Field_Cnt = 38, center_Field = 0, center_Max_Step = 0;
+int mode = 1, TF_step = 41, Field_Cnt = 38, center_Field = 0, center_Max_Step = 0, pHV_Mode=0;
 int startCode = 0, Skip_Data = 0, Line_pair=90, Module_No=0;
 int PD_Spec[10][3] = { 0 }, PS_Spec[10][3] = { 0 }, OK_Range_Spec = 4, current_Step = 0, HVD_Spec[10] = { 0 };
 int Center_H = 0, Center_V = 0, Dia_H3 = 0, Dia_V3 = 0, LR_H3 = 0, LR_V3 = 0, Dia_H5 = 0, Dia_V5 = 0;
@@ -199,7 +199,7 @@ int data_Parse(string line) {
 		if (MTF&&data_1 < 90)
 			data_1 /= 100;
 
-		if ((data_1 > 0.99|| data_1==0)&&i < 51)
+		if ((data_1 > 0.99|| data_1==0)&&i < 78)
 			continue;
 
 		//if (!MTF&&data_1 > 0.99)
@@ -222,14 +222,14 @@ int data_Parse(string line) {
 		}
 	}
 
-	if (step < TF_step - 1 && TF_Data[step].code >= TF_Data[step + 1].code) {
-		if (TF_Data[step].code - 30 >= TF_Data[step + 1].code) {
-			TF_Data[step + 1] = TF_Data[step];
-			current_Step++;
-		}
-		else
-			return -2;
-	}
+	//if (step < TF_step - 1 && TF_Data[step].code >= TF_Data[step + 1].code) {
+	//	if (TF_Data[step].code - 30 >= TF_Data[step + 1].code) {
+	//		TF_Data[step + 1] = TF_Data[step];
+	//		current_Step++;
+	//	}
+	//	else
+	//		return -2;
+	//}
 	if (step > 0 && f != Field_Cnt)
 		return -1;
 
@@ -453,7 +453,6 @@ void ThroughFocus::Display_Result() {
 				ui->log->setTextColor(QColor(255, 0, 0, 255));
 				ui->log->insertPlainText("0.6AA:NG\n");
 			}
-
 		}
 
 		if (F7) {
@@ -465,7 +464,6 @@ void ThroughFocus::Display_Result() {
 				ui->log->setTextColor(QColor(255, 0, 0, 255));
 				ui->log->insertPlainText("0.7AA:NG\n");
 			}
-
 		}
 
 		if (F8) {
@@ -477,7 +475,6 @@ void ThroughFocus::Display_Result() {
 				ui->log->setTextColor(QColor(255, 0, 0, 255));
 				ui->log->insertPlainText("0.8AA:NG\n");
 			}
-
 		}
 		ui->result->clear();
 
@@ -491,29 +488,27 @@ void ThroughFocus::Display_Result() {
 	}
 }
 
-
 void OK_Range() {
 
 	int mid = TF_step / 2 ;
 	int mid_Code = TF_Data[mid].code;
-	int max_OK_Code = 0, min_OK_Code = 1023000;
+	int max_OK_Code = 0, min_OK_Code = 65536;
 
 	for (int i = 0; i < Field_Cnt; i++) {
-		if(Field_Data[i].min_Code<16384&&Field_Data[i].min_Code > max_OK_Code)
+		if(Field_Data[i].min_Code > max_OK_Code)
 			max_OK_Code = Field_Data[i].min_Code;
 
-		if (Field_Data[i].max_Code>0&&Field_Data[i].max_Code <min_OK_Code)
+		if (Field_Data[i].max_Code <min_OK_Code)
 			min_OK_Code = Field_Data[i].max_Code;
 	}
 
 	TF_Check_Result << TF_Data[TF_step - 1].time << "	";
 
 	int range = min_OK_Code - max_OK_Code;
-
+	if (range == 0) range = abs(TF_Data[0].code - TF_Data[1].code) / 2;
 	if (range < OK_Range_Spec) {
 		OK[0] = 0;
 	}
-	bool pass = 1;
 
 	if(Field_Data[0].Peak_CodeHV>= max_OK_Code&&Field_Data[0].Peak_CodeHV<= min_OK_Code){
 		fout << "Center Code OK " << endl;
@@ -583,7 +578,7 @@ void Max_OK_Range_Adjust() {
 	int mid_Code = TF_Data[mid].code;
 	int max_OK_Code = mid_Code - 1, min_OK_Code = mid_Code + 1;
 	bool ok = true;
-	float Corner[4], max_X_tilt = -16384, max_Y_tilt = -16384, min_X_tilt = 16384, min_Y_tilt = 16384;
+	float Corner[4], max_X_tilt = -65536, max_Y_tilt = -65536, min_X_tilt = 65536, min_Y_tilt = 65536;
 
 	FD Field_Data_Adjust[50], Field_Data_Best[50];
 	for (int i = 0; i < 50; i++)
@@ -619,7 +614,6 @@ void Max_OK_Range_Adjust() {
 						Corner[sub_Field / 2] = Field_Data[PD_Data[f].group[i]].PD_AVG;
 				}
 			}
-
 			else {
 				for (int i = 0; i < PD_Data[f].cnt; i++) {
 					int x = Field_Data[PD_Data[f].group[i]].Field, sub_Field1, sub_Field2;
@@ -634,10 +628,9 @@ void Max_OK_Range_Adjust() {
 			float X_Tilt = (Corner[0] - Corner[1] + Corner[3] - Corner[2]) / 4.0 / f;  //Left - right
 			float Y_Tilt = (Corner[0] - Corner[3] + Corner[1] - Corner[2]) / 4.0 / f;   // up - down
 
-
-			if (F_POS[f] == 7) {
-				X_Tilt = (Corner[0] - Corner[2])/2.0;
-				Y_Tilt = (Corner[1] - Corner[3])/2.0;
+			if (F_POS[f] == 7|| F_POS[f] == 1) {
+				X_Tilt = (Corner[0] - Corner[2]) / 2.0 / f;
+				Y_Tilt = (Corner[1] - Corner[3]) / 2.0 / f;
 			}
 
 			if (X_Tilt > max_X_tilt)
@@ -660,8 +653,8 @@ void Max_OK_Range_Adjust() {
 	if (x_min > 0)x_min = -0.1;
 	if (y_min > 0)y_min = -0.1;
 
-	float offsetHV[4], offset[4], Max_range = -16384, best_x, best_y;
-	float min_of_max_Code = 16384;
+	float offsetHV[4], offset[4], Max_range = -65536, best_x = 0, best_y = 0;
+	float min_of_max_Code = 65536;
 	float max_of_min_Code = 0;
 #if 0
 	for (float a = x_min; a < x_max; a += 0.05)
@@ -785,7 +778,7 @@ void Max_OK_Range_Adjust() {
 					}
 				}
 
-			float up_Code = 16384;
+			float up_Code = 65536;
 			float down_Code = 0;
 			for (int j = 0; j < Field_Cnt; j++) {
 
@@ -822,85 +815,45 @@ void Max_OK_Range_Adjust() {
 		}
 
 #else
-float x_step = (x_max - x_min) / 10, y_step = (y_max - y_min) /10;
+	float x_step = (x_max - x_min) / 10, y_step = (y_max - y_min) /10;
 
-while (x_step > 0.02 || y_step > 0.02) {
+	while (x_step > 0.02 || y_step > 0.02) {
 
-	for (float a = x_min; a <= x_max; a += x_step)
-		for (float b = y_min; b <= y_max; b += y_step) {
-			///////////////////
-			if (a < 0.01 && b < 0.01&&a>-0.01&&b>-0.01) {
-				int xxx = 0;
-			}
-			///////////////
-			for (int i = 0; i < 50; i++)
-				Field_Data_Adjust[i] = Field_Data[i];
+		for (float a = x_min; a <= x_max; a += x_step)
+			for (float b = y_min; b <= y_max; b += y_step) {
+				///////////////////
+				if (a < 0.01 && b < 0.01&&a>-0.01&&b>-0.01) {
+					int xxx = 0;
+				}
+				///////////////
+				for (int i = 0; i < 50; i++)
+					Field_Data_Adjust[i] = Field_Data[i];
 
-			offsetHV[0] = a;
-			offsetHV[1] = b;
-			offsetHV[2] = -a;
-			offsetHV[3] = -b;
+				offsetHV[0] = a;
+				offsetHV[1] = b;
+				offsetHV[2] = -a;
+				offsetHV[3] = -b;
 
-			offset[0] = a + b;
-			offset[1] = -a + b;
-			offset[2] = -a - b;
-			offset[3] = a - b;
+				offset[0] = a + b;
+				offset[1] = -a + b;
+				offset[2] = -a - b;
+				offset[3] = a - b;
 
-			for (int j = 2; j < 9; j++)
-				if (PD_Data[j].cnt>1) {
-					for (int i = 0; i < PD_Data[j].cnt; i++) {
-						int x = Field_Data[PD_Data[j].group[i]].Field, sub_Field;
+				for (int j = 2; j < 9; j++)
+					if (PD_Data[j].cnt>1) {
+						for (int i = 0; i < PD_Data[j].cnt; i++) {
+							int x = Field_Data[PD_Data[j].group[i]].Field, sub_Field;
 
-						if (x > 99)
-							sub_Field = x % 100;
-						else
-							sub_Field = x % 10;
+							if (x > 99)
+								sub_Field = x % 100;
+							else
+								sub_Field = x % 10;
 
-						int k = (sub_Field - 1) / 2, m = 0, p = 0;
-
-						if (PD_Data[j].cnt == 16) {
-							k = (sub_Field - 1) / 4;
-							if (p > 1) {
-								Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offset[k] * j;
-								Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offset[k] * j;
-								Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offset[k] * j;
-								if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-									Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offset[k] * j;
-							}
-							else {
-								Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[k] * j;
-								Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[k] * j;
-								Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[k] * j;
-								if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-									Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[k] * j;
-							}
-						}
-						else if (PD_Data[j].cnt == 8 && F_POS[j] == 0) {
-							Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offset[k] * j;
-							Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offset[k] * j;
-							Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offset[k] * j;
-							if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-								Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offset[k] * j;
-						}
-						else if (PD_Data[j].cnt == 8 && F_POS[j] == 1) {
-							Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[k] * j;
-							Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[k] * j;
-							Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[k] * j;
-							if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-								Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[k] * j;
-						}
-						else if (PD_Data[j].cnt == 4 && F_POS[j] == 3) {
-							Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[2 * k] * j;
-							Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[2 * k] * j;
-							Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[2 * k] * j;
-							if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-								Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[2 * k] * j;
-						}
-						else if (PD_Data[j].cnt == 12) {
-
-							if (F_POS[j] != 7) {
-								if (sub_Field < 9) {
-									k = (sub_Field - 1) / 2;
+							int k = (sub_Field - 1) / 2, m = 0;
+							int p = k % 2;
+							if (PD_Data[j].cnt == 16) {
+								k = (sub_Field - 1) / 4;
+								if (p==1) {
 									Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offset[k] * j;
 									Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offset[k] * j;
 									Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offset[k] * j;
@@ -908,69 +861,117 @@ while (x_step > 0.02 || y_step > 0.02) {
 										Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offset[k] * j;
 								}
 								else {
-									if (F_POS[j] < 7) {
-										k = (sub_Field - 9) / 2;
-										if (F_POS[j] == 5) {
-											Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[2 * k] * j;
-											Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[2 * k] * j;
-											Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[2 * k] * j;
-											if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-												Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[2 * k] * j;
-										}
-										if (F_POS[j] == 6) {
-											Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[2 * k + 1] * j;
-											Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[2 * k + 1] * j;
-											Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[2 * k + 1] * j;
-											if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-												Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[2 * k + 1] * j;
-										}
+									float gain = j * 5 / 4;
+									if (sub_Field == 5 || sub_Field == 6 || sub_Field == 13 || sub_Field == 14) {
+										gain = j * 5 / 3;
 									}
-									else if (F_POS[j] == 7) {
-										Field_Data_Adjust[PD_Data[j].group[i]].max_Code += offsetHV[sub_Field - 9] * j;
-										Field_Data_Adjust[PD_Data[j].group[i]].min_Code += offsetHV[sub_Field - 9] * j;
-										Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code += offsetHV[sub_Field - 9] * j;
-										if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-											Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV += offsetHV[sub_Field - 9] * j;
-									}
+									Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[k] * gain;
+									Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[k] * gain;
+									Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[k] * gain;
+									if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+										Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[k] * gain;
 								}
-
 							}
-							else {
-								int pos = (x % 100) / 10;
-								Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[pos - 1] * j;
-								Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[pos - 1] * j;
-								Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[pos - 1] * j;
+							else if (PD_Data[j].cnt == 8 && F_POS[j] == 0) {
+								Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offset[k] * j;
+								Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offset[k] * j;
+								Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offset[k] * j;
 								if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-									Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[pos - 1] * j;
+									Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offset[k] * j;
+							}
+							else if (PD_Data[j].cnt == 8 && F_POS[j] == 1) {
+								float gain = j * 5 / 4;
+								if (sub_Field == 3 || sub_Field == 4 || sub_Field == 7 || sub_Field == 8) {
+									gain = j * 5 / 3;
+								}
+								Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[k] * gain;
+								Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[k] * gain;
+								Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[k] * gain;
+								if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+									Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[k] * gain;
+							}
+							else if (PD_Data[j].cnt == 4 && F_POS[j] == 3) {
+								Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[2 * k] * 5 / 4 * j;
+								Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[2 * k] * 5 / 4 * j;
+								Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[2 * k] * 5 / 4 * j;
+								if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+									Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[2 * k] * 5 / 4 * j;
+							}
+							else if (PD_Data[j].cnt == 12) {
+
+								if (F_POS[j] != 7) {
+									if (sub_Field < 9) {
+										k = (sub_Field - 1) / 2;
+										Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offset[k] * j;
+										Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offset[k] * j;
+										Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offset[k] * j;
+										if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+											Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offset[k] * j;
+									}
+									else {
+										if (F_POS[j] < 7) {
+											k = (sub_Field - 9) / 2;
+											if (F_POS[j] == 5) {
+												Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[2 * k] * j;
+												Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[2 * k] * j;
+												Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[2 * k] * j;
+												if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+													Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[2 * k] * j;
+											}
+											if (F_POS[j] == 6) {
+												Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[2 * k + 1] * j;
+												Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[2 * k + 1] * j;
+												Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[2 * k + 1] * j;
+												if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+													Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[2 * k + 1] * j;
+											}
+										}
+										else if (F_POS[j] == 7) {
+											Field_Data_Adjust[PD_Data[j].group[i]].max_Code += offsetHV[sub_Field - 9] * j;
+											Field_Data_Adjust[PD_Data[j].group[i]].min_Code += offsetHV[sub_Field - 9] * j;
+											Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code += offsetHV[sub_Field - 9] * j;
+											if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+												Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV += offsetHV[sub_Field - 9] * j;
+										}
+									}
+
+								}
+								else {
+									int pos = (x % 100) / 10;
+									Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= offsetHV[pos - 1] * j;
+									Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= offsetHV[pos - 1] * j;
+									Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= offsetHV[pos - 1] * j;
+									if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
+										Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= offsetHV[pos - 1] * j;
+								}
 							}
 						}
 					}
+
+				float up_Code = 65536;
+				float down_Code = 0;
+				for (int j = 0; j < Field_Cnt; j++) {
+
+					if (Field_Data_Adjust[j].max_Code < up_Code)
+						up_Code = Field_Data_Adjust[j].max_Code;
+
+					if (Field_Data_Adjust[j].min_Code > down_Code)
+						down_Code = Field_Data_Adjust[j].min_Code;
 				}
 
-			float up_Code = 16384;
-			float down_Code = 0;
-			for (int j = 0; j < Field_Cnt; j++) {
+				if (up_Code - down_Code > Max_range) {
+					max_of_min_Code = down_Code;
+					min_of_max_Code = up_Code;
+					Max_range = up_Code - down_Code;
 
-				if (Field_Data_Adjust[j].max_Code < up_Code)
-					up_Code = Field_Data_Adjust[j].max_Code;
+					best_x = a;
+					best_y = b;
 
-				if (Field_Data_Adjust[j].min_Code > down_Code)
-					down_Code = Field_Data_Adjust[j].min_Code;
+					for (int i = 0; i < 50; i++)
+						Field_Data_Best[i] = Field_Data_Adjust[i];
+				}
 			}
 
-			if (up_Code - down_Code > Max_range) {
-				max_of_min_Code = down_Code;
-				min_of_max_Code = up_Code;
-				Max_range = up_Code - down_Code;
-
-				best_x = a;
-				best_y = b;
-
-				for (int i = 0; i < 50; i++)
-					Field_Data_Best[i] = Field_Data_Adjust[i];
-			}
-		}
-		
 		x_min = best_x - x_step + x_step / 5;
 		x_max = best_x + x_step - x_step / 5;
 		y_min = best_y - y_step + y_step / 5;
@@ -990,7 +991,13 @@ while (x_step > 0.02 || y_step > 0.02) {
 		return;
 	}
 
+	fout << "7F Tilt_X: " << best_x * 7 << " ,Tilt_Y: " << best_y * 7 << endl;
+	fout << "8F Tilt_X: " << best_x * 8 << " ,Tilt_Y: " << best_y * 8 << endl;
+
 	float range = min_of_max_Code - max_of_min_Code;
+
+	if (range < 0)range = 0;
+	else range += abs(TF_Data[0].code- TF_Data[1].code)/2;
 
 	if (range < OK_Range_Spec) {
 		OK[10] = 0;
@@ -1009,7 +1016,7 @@ while (x_step > 0.02 || y_step > 0.02) {
 	for (int j = 2; j < 10; j++)
 		if (PD_Data[j].cnt>1) {
 
-			int max = 0, min = 16384;
+			int max = 0, min = 65536;
 			for (int i = 0; i < PD_Data[j].cnt; i++) {
 				int x = Field_Data[PD_Data[j].group[i]].Field, sub_Field;
 				if (x > 99)
@@ -1038,6 +1045,7 @@ while (x_step > 0.02 || y_step > 0.02) {
 		}
 	fout << endl;
 
+
 	if (show_Diagram) {
 
 		Mat M(TF_step * 10 + 30, Field_Cnt * 20 + 10, CV_8UC3, Scalar(235, 235, 235));
@@ -1063,7 +1071,7 @@ while (x_step > 0.02 || y_step > 0.02) {
 				}
 				if (abs(current_code - Field_Data_Best[i].Peak_Code) <= (TF_Data[1].code - TF_Data[0].code) / 2.0) {
 					Rect rect = Rect(20 * i + 6, 10 * j + 26, 18, 8);//起点；长宽			
-					rectangle(M, rect, Scalar(0, 150, 150), 1);
+					rectangle(M, rect, Scalar(200, 0, 200), 1);
 				}
 
 				if (field != ff) {
@@ -1137,7 +1145,7 @@ void OK_Range_Adjust(int f) {
 	float X_Tilt = (Corner[0] - Corner[1] + Corner[3] - Corner[2]) / 4.0;
 	float Y_Tilt = (Corner[0] - Corner[3] + Corner[1] - Corner[2]) / 4.0;
 
-	if (F_POS[f] == 7) {
+	if (F_POS[f] == 7|| F_POS[f] == 1) {
 		X_Tilt = (Corner[0] - Corner[2]) / 2.0;
 		Y_Tilt = (Corner[1] - Corner[3]) / 2.0;
 	}
@@ -1161,11 +1169,11 @@ void OK_Range_Adjust(int f) {
 				else
 					sub_Field = x % 10;
 
-				int k = (sub_Field - 1) / 2, m = 0, p = 0;
-
+				int k = (sub_Field - 1) / 2, m = 0;
+				int p = k % 2;
 				if (PD_Data[j].cnt == 16) {
 					k = (sub_Field - 1) / 4;
-					if (p > 1) {
+					if (p == 1) {
 						Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= PD_Data[f].offset[k] * j / f;
 						Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= PD_Data[f].offset[k] * j / f;
 						Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= PD_Data[f].offset[k] * j / f;
@@ -1173,11 +1181,17 @@ void OK_Range_Adjust(int f) {
 							Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * j / f;
 					}
 					else {
-						Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= PD_Data[f].offsetHV[k] * j / f;
-						Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= PD_Data[f].offsetHV[k] * j / f;
-						Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= PD_Data[f].offset[k] * j / f;
+
+						float gain = j * 5 / 4;
+						if (sub_Field == 5 || sub_Field == 6 || sub_Field == 13 || sub_Field == 14) {
+							gain = j * 5 / 3;
+						}
+
+						Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= PD_Data[f].offsetHV[k] * gain / f;
+						Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= PD_Data[f].offsetHV[k] * gain / f;
+						Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= PD_Data[f].offset[k] * gain / f;
 						if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-							Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * j / f;
+							Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * gain / f;
 					}
 				}
 				else if (PD_Data[j].cnt == 8 && F_POS[j] == 0) {
@@ -1188,18 +1202,24 @@ void OK_Range_Adjust(int f) {
 						Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * j / f;
 				}
 				else if (PD_Data[j].cnt == 8 && F_POS[j] == 1) {
-					Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= PD_Data[f].offsetHV[k] * j / f;
-					Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= PD_Data[f].offsetHV[k] * j / f;
-					Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= PD_Data[f].offset[k] * j / f;
+
+					float gain = j * 5 / 4;
+					if (sub_Field == 3|| sub_Field == 4|| sub_Field == 7|| sub_Field ==8 ) {
+						gain = j * 5 / 3;
+					}
+
+					Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= PD_Data[f].offsetHV[k] * gain / f;
+					Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= PD_Data[f].offsetHV[k] * gain / f;
+					Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= PD_Data[f].offset[k] * gain / f;
 					if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-						Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * j / f;
+						Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * gain / f;
 				}
 				else if (PD_Data[j].cnt == 4 && F_POS[j] == 3) {
-					Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= PD_Data[f].offsetHV[2 * k] * j / f;
-					Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= PD_Data[f].offsetHV[2 * k] * j / f;
-					Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= PD_Data[f].offset[k] * j / f;
+					Field_Data_Adjust[PD_Data[j].group[i]].max_Code -= PD_Data[f].offsetHV[2 * k] * j * 5 / 4 / f;
+					Field_Data_Adjust[PD_Data[j].group[i]].min_Code -= PD_Data[f].offsetHV[2 * k] * j * 5 / 4 / f;
+					Field_Data_Adjust[PD_Data[j].group[i]].Peak_Code -= PD_Data[f].offset[k] * j * 5 / 4 / f;
 					if (Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV != 0)
-						Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * j / f;
+						Field_Data_Adjust[PD_Data[j].group[i]].Peak_CodeHV -= PD_Data[f].offset[k] * j * 5 / 4 / f;
 				}
 				else if (PD_Data[j].cnt == 12) {
 					if (F_POS[j] != 7) {
@@ -1243,7 +1263,7 @@ void OK_Range_Adjust(int f) {
 			}
 		}
 
-	float min_of_max_Code = 16384;
+	float min_of_max_Code = 65536;
 	float max_of_min_Code = 0;
 	for (int j = 0; j < Field_Cnt; j++) {
 
@@ -1266,6 +1286,8 @@ void OK_Range_Adjust(int f) {
 
 //		float range = min_of_max_Code - max_of_min_Code + TF_Data[1].code - TF_Data[0].code;
 		float range = min_of_max_Code - max_of_min_Code;
+		if (range < 0)range = 0;
+		else range += abs(TF_Data[0].code - TF_Data[1].code) / 2;
 
 		if (range < OK_Range_Spec) {
 			OK[f] = 0;
@@ -1281,12 +1303,12 @@ void OK_Range_Adjust(int f) {
 
 		TF_Check_Result << range << "	";
 	}
-
+	fout << "Tilt_X: " << X_Tilt << " ,Tilt_Y: " << Y_Tilt << endl;
 
 	for (int j = 2; j < 10; j++)
 		if (PD_Data[j].cnt>1) {
 
-			int max = 0, min = 16384;
+			int max = 0, min = 65536;
 			for (int i = 0; i < PD_Data[j].cnt; i++) {
 				int x = Field_Data[PD_Data[j].group[i]].Field, sub_Field;
 				if (x > 99)
@@ -1341,7 +1363,7 @@ void OK_Range_Adjust(int f) {
 
 				if (abs(current_code - Field_Data_Adjust[i].Peak_Code)<= (TF_Data[1].code - TF_Data[0].code)/2.0) {
 					Rect rect = Rect(20 * i + 6, 10 * j + 26, 18, 8);//起点；长宽			
-					rectangle(M, rect, Scalar(0, 150, 150), 1);
+					rectangle(M, rect, Scalar(200, 0, 200), 1);
 				}
 
 				if (field != ff) {
@@ -1590,9 +1612,10 @@ void check_SFR_Max() {
 					max_AVG_step = j;
 					Field_Data[i].Peak_CodeHV = TF_Data[j].code;
 				}
-			//debug_log << TF_Data[j].code << "	" << TF_Data[j].sfr[i] << endl;
 		}
-
+		if (i % 2 == 1 && pHV_Mode == 0) {
+			Field_Data[i - 1].Peak_CodeHV = (Field_Data[i].Peak_Code + Field_Data[i - 1].Peak_Code) / 2;
+		}
 		if (i == 0)
 			center_Max_Step = max_step;
 
@@ -1737,7 +1760,7 @@ int upload(int mode) {
 				}
 
 				Field_Data[i].max_Code = 0;
-				Field_Data[i].min_Code = 16384;
+				Field_Data[i].min_Code = 65536;
 
 				for (int j = 0; j < TF_step; j++) {
 
@@ -1765,6 +1788,10 @@ int upload(int mode) {
 					else {
 						SFR_Table[j][i] = 1;
 					}
+				}
+
+				if (i % 2 == 1&& pHV_Mode==0) {
+					Field_Data[i - 1].Peak_CodeHV = (Field_Data[i].Peak_Code + Field_Data[i-1].Peak_Code)/2;
 				}
 			}
 		}
@@ -2019,6 +2046,7 @@ ThroughFocus::ThroughFocus(QWidget *parent) :
 	Item_Select = GetPrivateProfileInt(_T("TF_Setting"), TEXT("Item_Select"), 0, TEXT(".\\Setting\\Setting.ini"));
 	HVD_Spec[8] = GetPrivateProfileInt(_T("TF_Setting"), TEXT("HVD_Spec"), 0, TEXT(".\\Setting\\Setting.ini"));
 	Skip_Data = GetPrivateProfileInt(_T("TF_Setting"), TEXT("Skip_Data"), 0, TEXT(".\\Setting\\Setting.ini"));
+	pHV_Mode = GetPrivateProfileInt(_T("TF_Setting"), TEXT("HV_Mode"), 0, TEXT(".\\Setting\\Setting.ini"));
 
 	for (int i = 0; i < 65; i++) {
 		string f = "SFR_Data_";
@@ -2305,7 +2333,7 @@ void ThroughFocus::on_pushButton_Diagram_clicked()
 		rectangle(M, rect, color, 1);
 	}
 
-	int f = 0, c = 0;
+	int f = 0, c = 0, tilt_max = -65536, tilt_min = 65536;
 	for (int i = 0; i < Field_Cnt; i++) {
 		for (int j = 0; j < TF_step; j++) {
 			int field = Field_Data[i].Field / 10;
@@ -2319,8 +2347,11 @@ void ThroughFocus::on_pushButton_Diagram_clicked()
  
 			if (TF_Data[j].code == Field_Data[i].Peak_Code) {
 				Rect rect = Rect(20 * i + 6, 10 * j + 26, 18, 8);//起点；长宽			
-				rectangle(M, rect, Scalar(0, 150, 150), 1);
+				rectangle(M, rect, Scalar(200, 0, 200), 1);
 			}
+
+			if (Field_Data[i].PD < tilt_min)tilt_min = Field_Data[i].PD;
+			if (Field_Data[i].PD > tilt_max)tilt_max = Field_Data[i].PD;
 
 			if (field != f) {
 				f = field;
@@ -2343,7 +2374,129 @@ void ThroughFocus::on_pushButton_Diagram_clicked()
 	rectangle(M, rect, color, 1);
 
 	imshow("SFR_Table", M);   //窗口中显示图像
-	imwrite("SFR_Table.jpg", M);
+	imwrite("SFR_Table.jpg", M); \
+
+	////// Tilt Diagram
+	int sizeX = 640, sizeY = 480, code_range = tilt_max - tilt_min, cx = sizeX / 2,cy= sizeY / 2;
+	Mat M_Tilt(sizeY, sizeX, CV_8UC3, Scalar(235, 235, 235));
+
+	line(M_Tilt, Point(0, 0), Point(sizeX, sizeY), Scalar(0, 0, 0), 1);
+	line(M_Tilt, Point(0, sizeY), Point(sizeX, 0), Scalar(0, 0, 0), 1);
+
+	for (int k = 0; k < 9; k++) {
+		circle(M_Tilt, Point(cx, cy), sizeX/16 *(k+1), Scalar(0, 0, 0), 1, 8, 0);
+	}
+
+	for (int i = 2; i < Field_Cnt; i++){
+	
+			int field = Field_Data[i].Field / 10, f = Field_Data[i].Field % 10;
+			if (Field_Data[i].Field > 100) {
+				field = Field_Data[i].Field / 100;
+				f = Field_Data[i].Field % 100;
+			}
+			int ofx = sizeX / 16 * field* 0.8, ofy = sizeX / 16 * field * 0.6;
+			int ofx2 = sizeX / 16 * field, ofy2 = sizeX / 16 * field;
+			int px = cx, py = cy;
+
+			if (F_POS[field] == 0) {
+				if (int((f - 1) / 2) == 0) {
+					px = cx + ofx;
+					py = cy + ofy;
+				}
+				if (int((f - 1) / 2) == 1) {
+					px = cx - ofx;
+					py = cy + ofy; 
+				}
+				if (int((f - 1) / 2) == 2) {
+					px = cx - ofx;
+					py = cy - ofy;
+				}
+				if (int((f - 1) / 2) == 3) {
+					px = cx + ofx;
+					py = cy - ofy;
+				}
+			}
+			if (F_POS[field] == 1) {
+				if (int((f - 1) / 2) == 0) {
+					px = cx + ofx;
+				}
+				if (int((f - 1) / 2) == 1) {
+					py = cy + ofy;
+				}
+				if (int((f - 1) / 2) == 2) {
+					px = cx - ofx;
+				}
+				if (int((f - 1) / 2) == 3) {
+					py = cy - ofy;
+				}
+			}
+			else if (F_POS[field] == 2) {
+				if (int((f - 1) / 2) == 0) {
+					px = cx + ofx2;
+				}
+				if (int((f - 1) / 2) == 1) {
+					px = cx + ofx;
+					py = cy + ofy;
+				}
+				if (int((f - 1) / 2) == 2) {
+					py = cy + ofy2;
+				}
+				if (int((f - 1) / 2) == 3) {
+					px = cx - ofx;
+					py = cy + ofy;
+				}
+				if (int((f - 1) / 2) == 4) {
+					px = cx - ofx2;
+				}
+				if (int((f - 1) / 2) == 5) {
+					px = cx - ofx;
+					py = cy - ofy;
+				}
+				if (int((f - 1) / 2) == 6) {
+					py = cy - ofy2;
+				}
+				if (int((f - 1) / 2) == 7) {
+					px = cx + ofx;
+					py = cy - ofy;
+				}
+			}
+			else if (F_POS[field] == 3) {
+				if (int((f - 1) / 2) == 0) {
+					px = cx + ofx2;
+				}
+				if (int((f - 1) / 2) == 1) {
+					px = cx - ofx2;
+				}
+			}
+
+			if (f % 2 == 1) {
+				string text = "HV:";
+				text += to_string(int(Field_Data[i].PD_AVG));
+				Scalar color = Scalar(0, 0, 0);
+				if (Field_Data[i].PD_AVG > 0 && tilt_max > 0)color = Scalar(0, 0, 128 * Field_Data[i].PD_AVG / tilt_max + 110);
+				if (Field_Data[i].PD_AVG < 0 && tilt_min < 0)color = Scalar(0, 128 * Field_Data[i].PD_AVG / tilt_min + 110, 0);
+				putText(M_Tilt, text, Point(px - sizeX / 16, py - sizeX / 32+5), 5, 1, color, 1);
+
+				text = "H:";
+				text += to_string(int(Field_Data[i].PD));
+				color = Scalar(0, 0, 0);
+				if (Field_Data[i].PD > 0 && tilt_max > 0)color = Scalar(0, 0, 128 * Field_Data[i].PD / tilt_max + 110);
+				if (Field_Data[i].PD < 0 && tilt_min < 0)color = Scalar(0, 128 * Field_Data[i].PD / tilt_min + 110, 0);
+				putText(M_Tilt, text, Point(px - sizeX / 16, py+5), 5, 1, color, 1);
+			}
+			else {
+				string text = "V:";
+				text += to_string(int(Field_Data[i].PD));
+				color = Scalar(0, 0, 0);
+				if (Field_Data[i].PD > 0 && tilt_max > 0)color = Scalar(0, 0, 128 * Field_Data[i].PD / tilt_max + 110);
+				if (Field_Data[i].PD < 0 && tilt_min < 0)color = Scalar(0, 128 * Field_Data[i].PD / tilt_min + 110, 0);
+				putText(M_Tilt, text, Point(px - sizeX / 16, py + sizeX / 32+5), 5, 1, color, 1);
+			}
+		
+	}
+
+	imshow("Tilt_PD", M_Tilt);   //窗口中显示图像
+
 	getchar();
 
 }
@@ -2445,6 +2598,9 @@ void check_MTF_Max() {
 			//debug_log << TF_Data[j].code << "	" << TF_Data[j].sfr[i] << endl;
 		}
 
+		if (i % 2 == 1 && pHV_Mode == 0) {
+			Field_Data[i - 1].Peak_CodeHV = (Field_Data[i].Peak_Code + Field_Data[i - 1].Peak_Code) / 2;
+		}
 		if(i==0)
 			center_Max_Step = max_step;
 

@@ -38,6 +38,7 @@ public:
 	void get_Selection();
 
 private slots :
+
 //	void on_pushButton_Minimize_clicked();
 //	void on_activatedSysTrayIcon(QSystemTrayIcon::ActivationReason reason);
 //	void on_showMainAction();
